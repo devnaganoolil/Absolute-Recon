@@ -8,3 +8,7 @@ __pycache__/
 # Superseded by index.html (the live-Overpass prototype). Left on disk so you
 # still have it; delete when you're happy with the new site.
 alpr-map.html
+
+# harvest checkpoint
+data/.harvest-state.json
+data/.harvest-state.tmp

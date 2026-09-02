@@ -29,7 +29,7 @@ the full worldwide dataset.
 
 ```
 index.html                        the entire site
-data/cameras.json                 generated dataset, committed
+data/cameras.json                 generated dataset, committed (~7.6 MB, ~2 MB gzipped)
 scripts/harvest.py                Overpass harvester
 .github/workflows/refresh-data.yml  weekly regeneration
 _headers                          Cloudflare Pages cache + security headers
@@ -51,11 +51,16 @@ requests and geolocation.
 python3 scripts/harvest.py
 ```
 
-It walks the planet as a quadtree: it asks Overpass for a large bounding box
-and, when the server refuses one as too large, splits it into four and retries.
-Ocean returns empty in a single request; dense metros subdivide a few levels.
-Expect it to take a while — Overpass is frequently busy, and the script backs
-off and rotates between three mirrors rather than hammering one.
+ALPR is a rare tag — about 150k features worldwide — so the script first asks
+Overpass for the entire planet in a single query. That normally succeeds in two
+or three minutes.
+
+If Overpass refuses it (busy server, or a future dataset large enough to blow
+the memory limit), it falls back to walking a 30° grid as a quadtree,
+subdividing only the boxes the server rejects. That path is much slower, so it
+checkpoints to `data/.harvest-state.json` every 20 cells and a re-run resumes
+where it left off. Either way the script backs off and rotates between three
+mirrors rather than hammering one.
 
 The output is arrays-of-arrays with interned strings, roughly a quarter the size
 of the equivalent GeoJSON. `index.html` expands it to GeoJSON at load time.
