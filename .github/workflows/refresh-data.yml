@@ -1,0 +1,75 @@
+name: Refresh camera data
+
+# Overpass is slow and often busy, so this runs on a schedule rather than at
+# deploy time. Pushing the regenerated file triggers the Cloudflare Pages build.
+on:
+  schedule:
+    - cron: "17 6 * * 1"      # Mondays, 06:17 UTC
+  workflow_dispatch:           # and on demand from the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Harvest ALPR cameras from OpenStreetMap
+        run: python3 scripts/harvest.py
+
+      - name: Sanity-check the result
+        run: |
+          python3 - <<'PY'
+          import json, sys, pathlib
+
+          new = json.loads(pathlib.Path("data/cameras.json").read_text())
+          count = new["count"]
+          print(f"harvested {count:,} cameras")
+
+          if count < 1000:
+              sys.exit(f"refusing to publish: only {count} cameras, harvest likely failed")
+
+          # Guard against a partial harvest silently gutting the map. Compare
+          # against whatever the previous commit had.
+          import subprocess
+          try:
+              prev_raw = subprocess.check_output(
+                  ["git", "show", "HEAD:data/cameras.json"], text=True
+              )
+              prev = json.loads(prev_raw)["count"]
+          except Exception:
+              print("no previous dataset to compare against")
+              sys.exit(0)
+
+          print(f"previous: {prev:,}")
+          if prev and count < prev * 0.8:
+              sys.exit(
+                  f"refusing to publish: {count:,} is a {100*(1-count/prev):.0f}% "
+                  f"drop from {prev:,}; investigate before overwriting"
+              )
+          PY
+
+      - name: Commit if the data changed
+        run: |
+          if git diff --quiet -- data/cameras.json; then
+            echo "no change"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          COUNT=$(python3 -c "import json;print(f\"{json.load(open('data/cameras.json'))['count']:,}\")")
+          git add data/cameras.json
+          git commit -m "data: weekly refresh — ${COUNT} cameras"
+          git push

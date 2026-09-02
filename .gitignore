@@ -1,0 +1,10 @@
+.DS_Store
+*.bak
+*.tmp
+data/*.json.tmp
+__pycache__/
+*.pyc
+
+# Superseded by index.html (the live-Overpass prototype). Left on disk so you
+# still have it; delete when you're happy with the new site.
+alpr-map.html

@@ -1,0 +1,16 @@
+# Cloudflare Pages header rules.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+  Permissions-Policy: geolocation=(self), camera=(), microphone=(), payment=()
+
+# The dataset is rewritten by the weekly refresh, so let a browser reuse it for
+# an hour but always revalidate against the edge after that.
+/data/*
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+
+# Never let a stale shell hide a data-format change.
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
