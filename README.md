@@ -1,6 +1,6 @@
 # Absolute Recon
 
-One map, three datasets:
+The night side of the planet, with three datasets lit up on it:
 
 - **ALPR cameras** — community-reported automated license plate reader
   locations (Flock Safety, Motorola/Vigilant, Genetec, Leonardo/ELSAG and
@@ -11,7 +11,9 @@ One map, three datasets:
 - **Natural disasters** — current earthquakes, wildfires, storms, floods,
   volcanoes and drought, merged from USGS, NASA and GDACS.
 
-Each is a layer you can switch on and off independently.
+Each is a layer you can switch on and off independently, and each point is
+drawn as a light rather than a marker — so at world zoom the data reads the way
+city lights do from orbit, and the colour tells you what kind of light it is.
 
 Live site: _(fill in once Cloudflare Pages is connected)_
 
@@ -33,8 +35,26 @@ JavaScript would mean two copies of the same category mapping, free to drift
 apart. The Action re-runs every three hours instead, which is fresh enough for
 a map whose shortest-lived hazard is a wildfire.
 
-Rendering is MapLibre GL, so clustering runs on the GPU and comfortably handles
-the full worldwide dataset.
+Rendering is MapLibre GL v5 with its globe projection, so this is a projection
+on a normal map rather than a separate 3D engine — every layer, filter and popup
+is ordinary MapLibre and simply wraps onto a sphere.
+
+The basemap style is hand-written rather than pulled from OpenFreeMap, because
+none of theirs is dark enough to be a night side. It draws only what the globe
+needs: near-black land, darker water, a faint lit coastline, country borders and
+a graticule. Everything bright on screen is supposed to be the data.
+
+Each point is two stacked circle layers — a wide fully-blurred disc in the
+saturated hue, and a small nearly-sharp one in a whitened version of it. That
+pairing is what reads as *emitting*; a single bright circle still looks like a
+sticker on the planet. Where the glows overlap they pile up, so a dense metro
+turns into one bright smear on its own.
+
+That is also why the camera layer no longer clusters. Clustering 148,805 points
+is the obvious call and the wrong one here: the clusters were opaque discs with
+counts in them, and the whole reason this layer is worth looking at is the
+carpet. Unclustered and at 60fps, the lights trace out every lit corridor in
+North America and Europe without being told where the cities are.
 
 Supporting services, all of which permit public app use:
 
@@ -50,6 +70,8 @@ Supporting services, all of which permit public app use:
 ```
 index.html                           the page shell and all the styling
 js/main.js                           boot, layer lifecycle, stacking order
+js/globe.js                          globe style, atmosphere, starfield, spin
+js/lights.js                         turning points into glow/core light pairs
 js/panel.js                          the layers & filters panel
 js/cameras.js  js/conflicts.js  js/disasters.js
                                      one module per dataset
@@ -78,6 +100,14 @@ Each layer module exports the same small interface (`load`, `addLayers`,
 `filters`, `applyFilter`, `popup`, `legend`), and `panel.js` renders whatever
 those return. Adding a fourth dataset means writing a module and adding it to
 the `LAYERS` array in `main.js` — the panel needs no changes.
+
+Two ordering rules matter. Every layer's *glow* is painted below every layer's
+*core*, so one layer's halo never washes out another's bright centre; `STACK` in
+`main.js` is the single place that decides this, and it is re-applied after each
+lazily-loaded layer arrives. And since all three layers are now lights rather
+than dots, circles and icons, the ring around orange- and red-alert disasters is
+what keeps them distinguishable from conflict — nothing else on the globe has
+one.
 
 ## Running locally
 

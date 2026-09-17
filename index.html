@@ -3,24 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Absolute Recon — cameras, conflict and disasters</title>
-<meta name="description" content="A map of community-reported ALPR camera locations, active armed conflicts, and current natural disasters worldwide — built from OpenStreetMap, UCDP, USGS, NASA and GDACS data.">
+<title>Absolute Recon — the night side of the planet</title>
+<meta name="description" content="A holographic night globe of community-reported ALPR camera locations, active armed conflicts, and current natural disasters worldwide — built from OpenStreetMap, UCDP, USGS, NASA and GDACS data.">
 
 <meta property="og:title" content="Absolute Recon">
-<meta property="og:description" content="ALPR cameras, armed conflict and natural disasters on one map.">
+<meta property="og:description" content="ALPR cameras, armed conflict and natural disasters, lit up on a night globe.">
 <meta property="og:type" content="website">
+<meta name="theme-color" content="#04060E">
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.24.0/maplibre-gl.css">
 
 <style>
 :root{
-  --ink:#141A22;
-  --ink-soft:#5A6675;
-  --steel:#E7EAEE;
-  --paper:#F7F8F9;
-  --line:#C9D0D8;
-  --hazard:#D4A017;
-  --danger:#8C3A2E;
+  /* Space, then three steps up out of it for surfaces. */
+  --void:#04060E;
+  --panel:#0A111F;
+  --raised:#111B2D;
+  --line:rgba(120,180,220,.18);
+  --line-strong:rgba(120,180,220,.34);
+
+  --ink:#E4EDF7;
+  --ink-soft:#8CA3BC;
+  --ink-dim:#5E7488;
+  --cyan:#40E0FF;
+  --hazard:#FFC53D;
+  --danger:#FF5C6E;
 }
 
 *{box-sizing:border-box}
@@ -28,64 +35,87 @@ html,body{height:100%;margin:0}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   color:var(--ink);
-  background:var(--paper);
+  background:var(--void);
   -webkit-font-smoothing:antialiased;
   overflow:hidden;
 }
 
-#map{position:absolute;inset:0;background:var(--steel)}
+/* Stars sit behind the map; the globe canvas is transparent around the sphere.
+   The explicit 100% matters: a canvas is a replaced element, so `inset:0`
+   alone leaves it at its intrinsic size and each redraw grew it further. */
+#stars{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  z-index:0;display:block;pointer-events:none;
+}
+#map{position:absolute;inset:0;z-index:1;background:transparent}
+.maplibregl-canvas{background:transparent}
+
+/* A faint vignette so the chrome at the edges has something to sit on. */
+.vignette{
+  position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 45%,rgba(4,6,14,0) 42%,rgba(4,6,14,.72) 100%);
+}
 
 /* ---------- top bar ---------- */
 .bar{
   position:absolute;top:0;left:0;right:0;z-index:600;
   padding:10px 12px 12px;
   padding-top:calc(10px + env(safe-area-inset-top,0px));
-  background:linear-gradient(to bottom,rgba(247,248,249,.97) 72%,rgba(247,248,249,0));
+  background:linear-gradient(to bottom,rgba(4,6,14,.92) 62%,rgba(4,6,14,0));
   pointer-events:none;
 }
 .bar > *{pointer-events:auto}
 
-.brand{display:flex;align-items:baseline;gap:8px;margin:0 2px 8px}
-.brand h1{font-size:17px;font-weight:650;letter-spacing:-.015em;margin:0}
+.brand{display:flex;align-items:baseline;gap:9px;margin:0 2px 8px}
+.brand h1{
+  font-size:17px;font-weight:650;letter-spacing:.02em;margin:0;
+  color:var(--ink);
+  text-shadow:0 0 18px rgba(64,224,255,.45);
+}
 .brand span{font-size:12.5px;color:var(--ink-soft)}
 
 .searchrow{display:flex;gap:8px;max-width:860px}
 .field{
   flex:1;position:relative;display:flex;align-items:center;
-  background:#fff;border:1px solid var(--line);border-radius:9px;
-  box-shadow:0 1px 2px rgba(20,26,34,.06);
+  background:rgba(17,27,45,.82);border:1px solid var(--line);border-radius:9px;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 }
+.field:focus-within{border-color:var(--line-strong)}
 .field input{
   flex:1;border:0;background:none;outline:none;
   font:inherit;font-size:15px;padding:11px 12px;color:var(--ink);
   min-width:0;
 }
-.field input::placeholder{color:#98A2AE}
+.field input::placeholder{color:var(--ink-dim)}
 .iconbtn{
   border:0;background:none;padding:0 12px;align-self:stretch;
   color:var(--ink-soft);cursor:pointer;font-size:15px;
 }
-.iconbtn:hover{color:var(--ink)}
+.iconbtn:hover{color:var(--cyan)}
 
 button.solid,button.ghost{
   font:inherit;font-size:14px;font-weight:550;
   padding:0 14px;border-radius:9px;cursor:pointer;white-space:nowrap;
 }
-button.solid{border:1px solid var(--ink);background:var(--ink);color:#fff}
-button.solid:hover{background:#0B1017}
-button.solid:disabled{opacity:.45;cursor:default}
-button.ghost{
-  border:1px solid var(--line);background:#fff;color:var(--ink);
-  display:inline-flex;align-items:center;gap:7px;
+button.solid{
+  border:1px solid rgba(64,224,255,.5);
+  background:rgba(64,224,255,.14);color:var(--cyan);
 }
-button.ghost:hover{border-color:var(--ink-soft)}
+button.solid:hover{background:rgba(64,224,255,.24)}
+button.solid:disabled{opacity:.4;cursor:default}
+button.ghost{
+  border:1px solid var(--line);background:rgba(17,27,45,.82);color:var(--ink);
+  display:inline-flex;align-items:center;gap:7px;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+button.ghost:hover{border-color:var(--line-strong)}
 button.ghost .count{
   font-variant-numeric:tabular-nums;font-size:11.5px;font-weight:650;
-  background:var(--ink);color:#fff;border-radius:999px;
+  background:rgba(64,224,255,.18);color:var(--cyan);border-radius:999px;
   min-width:17px;height:17px;display:grid;place-items:center;padding:0 4px;
 }
 
-:focus-visible{outline:2px solid var(--hazard);outline-offset:2px}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 
 /* ---------- layer panel ---------- */
 .panel{
@@ -93,18 +123,22 @@ button.ghost .count{
   top:calc(104px + env(safe-area-inset-top,0px));right:12px;width:332px;
   max-height:calc(100% - 132px - env(safe-area-inset-top,0px));
   display:flex;flex-direction:column;
-  background:#fff;border:1px solid var(--line);border-radius:12px;
-  box-shadow:0 10px 30px rgba(20,26,34,.18);
+  background:rgba(10,17,31,.9);border:1px solid var(--line);border-radius:12px;
+  box-shadow:0 18px 50px rgba(0,0,0,.6);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
 }
 .panel[hidden]{display:none}
 .panel-head{
   display:flex;align-items:center;justify-content:space-between;
-  padding:11px 8px 11px 14px;border-bottom:1px solid var(--steel);flex:none;
+  padding:11px 8px 11px 14px;border-bottom:1px solid var(--line);flex:none;
 }
-.panel-head h2{font-size:13.5px;font-weight:650;margin:0;letter-spacing:.01em}
+.panel-head h2{
+  font-size:11px;font-weight:650;margin:0;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);
+}
 .panel-body{overflow-y:auto;padding:4px 0 6px;overscroll-behavior:contain}
 
-.layer{padding:12px 14px;border-bottom:1px solid var(--steel)}
+.layer{padding:12px 14px;border-bottom:1px solid var(--line)}
 .layer:last-child{border-bottom:0}
 
 /* switch */
@@ -112,16 +146,19 @@ button.ghost .count{
 .switch input{position:absolute;opacity:0;width:0;height:0}
 .switch .track{
   flex:none;width:34px;height:20px;border-radius:999px;margin-top:1px;
-  background:var(--line);position:relative;transition:background .15s ease;
+  background:rgba(120,180,220,.2);position:relative;transition:background .15s ease;
 }
 .switch .track::after{
   content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;
-  border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);
-  transition:transform .15s ease;
+  border-radius:50%;background:#cbd8e6;
+  transition:transform .15s ease,background .15s ease;
 }
-.switch input:checked + .track{background:var(--accent,var(--ink))}
-.switch input:checked + .track::after{transform:translateX(14px)}
-.switch input:focus-visible + .track{outline:2px solid var(--hazard);outline-offset:2px}
+.switch input:checked + .track{
+  background:color-mix(in srgb,var(--accent) 45%,transparent);
+  box-shadow:0 0 14px -2px var(--accent);
+}
+.switch input:checked + .track::after{transform:translateX(14px);background:var(--accent)}
+.switch input:focus-visible + .track{outline:2px solid var(--cyan);outline-offset:2px}
 .switch-text{display:block;min-width:0}
 .switch-title{display:block;font-size:14px;font-weight:600;line-height:1.3}
 .switch-sub{display:block;font-size:11.5px;color:var(--ink-soft);line-height:1.35;margin-top:1px}
@@ -132,78 +169,94 @@ button.ghost .count{
   margin:10px 0 0 44px;
 }
 .layer-note.err{color:var(--danger)}
-.layer-note a{color:var(--ink-soft)}
+.layer-note a{color:var(--cyan)}
 .fgroup + .fgroup{margin-top:11px}
 .fgroup-title{
-  font-size:10.5px;font-weight:650;text-transform:uppercase;
-  letter-spacing:.06em;color:var(--ink-soft);margin:0 0 6px;
+  font-size:10px;font-weight:650;text-transform:uppercase;
+  letter-spacing:.12em;color:var(--ink-dim);margin:0 0 6px;
 }
 
 /* ---------- chips ---------- */
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{
   display:inline-flex;align-items:center;gap:6px;
-  border:1px solid var(--line);background:#fff;color:var(--ink-soft);
+  border:1px solid var(--line);background:rgba(17,27,45,.7);color:var(--ink-soft);
   font:inherit;font-size:12px;font-weight:500;
   padding:5px 9px;border-radius:999px;cursor:pointer;white-space:nowrap;
-  max-width:100%;
+  max-width:100%;transition:border-color .12s ease,color .12s ease;
 }
-.chip[aria-pressed="true"]{border-color:var(--ink);color:var(--ink)}
-.chip[aria-pressed="false"]{opacity:.45}
-.dot{width:9px;height:9px;border-radius:50%;flex:none}
-.chip .n{font-variant-numeric:tabular-nums;color:var(--ink-soft)}
-.chip .note{font-size:10.5px;color:var(--ink-soft);font-style:italic}
+.chip[aria-pressed="true"]{border-color:var(--line-strong);color:var(--ink)}
+.chip[aria-pressed="false"]{opacity:.42}
+/* The chip dot is the same light the point is on the globe, so the legend and
+   the planet always agree. */
+.dot{
+  width:9px;height:9px;border-radius:50%;flex:none;
+  background:currentColor;
+  box-shadow:0 0 8px -1px currentColor;
+}
+.chip .n{font-variant-numeric:tabular-nums;color:var(--ink-dim)}
+.chip .note{font-size:10.5px;color:var(--ink-dim);font-style:italic}
 
 /* segmented control */
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .seg button{
   font:inherit;font-size:12px;font-weight:500;border:0;
-  background:#fff;color:var(--ink-soft);padding:6px 10px;cursor:pointer;
+  background:rgba(17,27,45,.7);color:var(--ink-soft);padding:6px 10px;cursor:pointer;
   border-right:1px solid var(--line);
 }
 .seg button:last-child{border-right:0}
-.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:rgba(64,224,255,.16);color:var(--cyan)}
 
 /* ---------- status ---------- */
 .status{
   position:absolute;left:50%;transform:translateX(-50%);
   bottom:calc(30px + env(safe-area-inset-bottom,0px));z-index:610;
-  background:var(--ink);color:#fff;border-radius:999px;
+  background:rgba(10,17,31,.92);color:var(--ink);
+  border:1px solid var(--line);border-radius:999px;
   font-size:13px;padding:9px 16px;
-  box-shadow:0 4px 14px rgba(20,26,34,.25);
+  box-shadow:0 10px 30px rgba(0,0,0,.55);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   max-width:calc(100% - 32px);text-align:center;
 }
-.status.err{background:var(--danger)}
+.status.err{border-color:rgba(255,92,110,.5);color:#FFB3BC}
 .status[hidden]{display:none}
 
 /* ---------- search results ---------- */
 .hits{
   position:absolute;left:12px;right:12px;max-width:836px;z-index:650;
-  background:#fff;border:1px solid var(--line);border-radius:9px;
-  box-shadow:0 8px 24px rgba(20,26,34,.16);
+  background:rgba(10,17,31,.95);border:1px solid var(--line);border-radius:9px;
+  box-shadow:0 18px 44px rgba(0,0,0,.6);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   overflow:hidden;max-height:50vh;overflow-y:auto;
 }
 .hits[hidden]{display:none}
 .hits button{
   display:block;width:100%;text-align:left;border:0;background:none;
   font:inherit;font-size:14px;padding:10px 13px;cursor:pointer;
-  border-bottom:1px solid var(--steel);color:var(--ink);
+  border-bottom:1px solid var(--line);color:var(--ink);
 }
 .hits button:last-child{border-bottom:0}
-.hits button:hover,.hits button:focus{background:var(--paper);outline:none}
+.hits button:hover,.hits button:focus{background:rgba(64,224,255,.1);outline:none}
 .hits .sub{display:block;font-size:12px;color:var(--ink-soft);margin-top:1px}
 
 /* ---------- popup ---------- */
 .maplibregl-popup-content{
+  background:rgba(10,17,31,.95);color:var(--ink);
+  border:1px solid var(--line-strong);
   border-radius:10px;padding:12px 14px;
   font-size:13.5px;line-height:1.45;
-  box-shadow:0 6px 20px rgba(20,26,34,.2);
+  box-shadow:0 16px 44px rgba(0,0,0,.65);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
 }
+.maplibregl-popup-tip{display:none}
+.maplibregl-popup-close-button{color:var(--ink-soft);font-size:17px;padding:2px 7px}
+.maplibregl-popup-close-button:hover{background:none;color:var(--ink)}
 .pop-title{font-weight:650;font-size:14.5px;margin:0 0 4px;display:flex;align-items:flex-start;gap:7px}
 .pop-title .dot{margin-top:5px}
 .pop-tag{
-  font-size:10.5px;font-weight:650;text-transform:uppercase;letter-spacing:.06em;
-  color:var(--ink-soft);margin:0 0 7px;
+  font-size:10px;font-weight:650;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--ink-dim);margin:0 0 7px;
 }
 .pop-lede{margin:0 0 8px;font-size:12.5px;color:var(--ink);line-height:1.4}
 .pop dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0}
@@ -211,15 +264,33 @@ button.ghost .count{
 .pop dd{margin:0}
 .pop-warn{
   margin:8px 0 0;padding:6px 8px;border-radius:6px;
-  background:#FDF6E3;color:#6B5312;font-size:11.5px;line-height:1.4;
+  background:rgba(255,197,61,.1);border:1px solid rgba(255,197,61,.28);
+  color:#F0D9A0;font-size:11.5px;line-height:1.4;
 }
-.pop a{display:inline-block;margin-top:8px;color:var(--ink)}
+.pop a{display:inline-block;margin-top:8px;color:var(--cyan)}
+
+/* ---------- map controls ---------- */
+.maplibregl-ctrl-group{
+  background:rgba(10,17,31,.9)!important;
+  border:1px solid var(--line)!important;
+  box-shadow:0 8px 22px rgba(0,0,0,.5)!important;
+}
+.maplibregl-ctrl-group button+button{border-top:1px solid var(--line)!important}
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon{filter:invert(1) brightness(.88)}
+.maplibregl-ctrl-attrib{
+  background:rgba(4,6,14,.75)!important;color:var(--ink-dim)!important;
+}
+.maplibregl-ctrl-attrib a{color:var(--ink-soft)!important}
+.maplibregl-ctrl-scale{
+  background:rgba(4,6,14,.6)!important;
+  border-color:var(--line)!important;color:var(--ink-soft)!important;
+}
 
 /* ---------- footer ---------- */
 .foot{
   position:absolute;left:8px;bottom:calc(4px + env(safe-area-inset-bottom,0px));
-  z-index:500;font-size:10.5px;color:var(--ink-soft);
-  background:rgba(247,248,249,.85);padding:3px 7px;border-radius:5px;
+  z-index:500;font-size:10.5px;color:var(--ink-dim);
+  background:rgba(4,6,14,.72);padding:3px 7px;border-radius:5px;
   max-width:calc(100% - 120px);
 }
 .foot a{color:var(--ink-soft)}
@@ -228,18 +299,26 @@ button.ghost .count{
 .boot{
   position:absolute;inset:0;z-index:700;
   display:flex;align-items:center;justify-content:center;
-  background:var(--paper);
+  background:var(--void);
   font-size:14px;color:var(--ink-soft);
-  transition:opacity .35s ease;
+  transition:opacity .5s ease;
 }
 .boot[hidden]{display:none}
 .boot.gone{opacity:0;pointer-events:none}
-.boot .inner{text-align:center;max-width:280px;padding:0 20px}
-.bar-track{
-  width:180px;height:3px;border-radius:2px;background:var(--steel);
-  margin:12px auto 0;overflow:hidden;
+.boot .inner{text-align:center;max-width:300px;padding:0 20px}
+.boot .mark{
+  font-size:11px;letter-spacing:.3em;text-transform:uppercase;
+  color:var(--cyan);margin-bottom:14px;
+  text-shadow:0 0 16px rgba(64,224,255,.5);
 }
-.bar-fill{height:100%;width:0;background:var(--ink);transition:width .25s ease}
+.bar-track{
+  width:180px;height:2px;border-radius:2px;background:rgba(120,180,220,.16);
+  margin:14px auto 0;overflow:hidden;
+}
+.bar-fill{
+  height:100%;width:0;background:var(--cyan);
+  box-shadow:0 0 10px var(--cyan);transition:width .25s ease;
+}
 
 /* ---------- small screens ---------- */
 @media (max-width:640px){
@@ -262,7 +341,9 @@ button.ghost .count{
 </head>
 <body>
 
-<div id="map" role="application" aria-label="Map of plate reader cameras, armed conflict and natural disasters"></div>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div id="map" role="application" aria-label="Globe of plate reader cameras, armed conflict and natural disasters"></div>
+<div class="vignette" aria-hidden="true"></div>
 
 <header class="bar">
   <div class="brand">
@@ -308,12 +389,13 @@ button.ghost .count{
 
 <div class="boot" id="boot">
   <div class="inner">
-    <div id="boot-msg">Loading map data…</div>
+    <div class="mark">Absolute Recon</div>
+    <div id="boot-msg">Lighting up the planet…</div>
     <div class="bar-track"><div class="bar-fill" id="boot-bar"></div></div>
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.24.0/maplibre-gl.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

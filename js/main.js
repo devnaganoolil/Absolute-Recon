@@ -10,6 +10,7 @@
 import { $, say, loadPrefs, savePrefs } from './util.js';
 import * as panel from './panel.js';
 import { wire as wireSearch } from './search.js';
+import { buildStyle, applySky, starfield, idleSpin, fitZoom } from './globe.js';
 
 import cameras from './cameras.js';
 import disasters from './disasters.js';
@@ -23,15 +24,21 @@ const byId = new Map(LAYERS.map(l => [l.id, l]));
   each loads on demand, so every add is followed by a restack rather than
   relying on insertion order.
 
-  Cameras sit at the bottom: there are 148k of them and they are the layer a
-  visitor is least likely to be reading when another is switched on.  Disaster
-  icons go on top because they are the only layer with real icons and the one
-  that suffers most from being half-covered.
+  All the glows sit below all the cores, so one layer's soft halo never washes
+  out another layer's bright centre -- which is what happened when each layer
+  was added as a self-contained glow/core pair.
+
+  Cameras are the bottom of both groups: 148k faint pinpricks are the carpet
+  everything else is read against.
 */
 const STACK = [
-  'cam-clusters', 'cam-cluster-count', 'cam',
-  'conflict-event', 'conflict-bubble', 'conflict-label',
-  'disaster-alert', 'disaster-icon',
+  'cam-glow',
+  'conflict-event-glow', 'conflict-bubble-glow',
+  'disaster-glow',
+  'cam-core',
+  'conflict-event-core', 'conflict-bubble-core',
+  'disaster-core',
+  'conflict-label',
 ];
 
 // 'off' | 'loading' | 'ready' | 'error'
@@ -51,11 +58,17 @@ function persist(extra){
 }
 
 /* ---------- map ---------- */
+starfield($('stars'));
+
+// Read before the Map exists: `hash: true` writes one immediately.
+const deepLinked = Boolean(location.hash);
+
 const map = new maplibregl.Map({
   container: 'map',
-  style: 'https://tiles.openfreemap.org/styles/liberty',
-  center: [-98.58, 39.83],
-  zoom: 3.4,
+  style: buildStyle(),
+  center: [10, 25],
+  zoom: fitZoom(),
+  minZoom: 0.6,             // below this the globe floats in a sea of chrome
   attributionControl: false,
   hash: true,               // shareable deep links: #zoom/lat/lon
 });
@@ -67,7 +80,9 @@ if(window.ResizeObserver){
   new ResizeObserver(() => map.resize()).observe($('map'));
 }
 
-map.addControl(new maplibregl.NavigationControl({ showCompass:false }), 'bottom-right');
+// The compass earns its place on a globe: dragging can roll the planet, and
+// this is how you get north back.
+map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), 'bottom-right');
 map.addControl(new maplibregl.GeolocateControl({
   positionOptions:{ enableHighAccuracy:true },
   trackUserLocation:false,
@@ -166,22 +181,13 @@ async function setLayer(id, want){
 function wirePopups(){
   const interactive = LAYERS.flatMap(l => l.interactive);
 
-  map.on('click', async e => {
+  map.on('click', e => {
     const hits = map.queryRenderedFeatures(e.point, {
       layers: interactive.filter(id => map.getLayer(id)),
     });
     if(!hits.length) return;
 
     const f = hits[0];
-
-    // A camera cluster zooms instead of opening a popup.
-    if(f.layer.id === 'cam-clusters'){
-      const zoom = await map.getSource('cams')
-        .getClusterExpansionZoom(f.properties.cluster_id);
-      map.easeTo({ center:f.geometry.coordinates, zoom });
-      return;
-    }
-
     const owner = LAYERS.find(l => l.interactive.includes(f.layer.id));
     const html = owner?.popup(f);
     if(!html) return;
@@ -230,6 +236,7 @@ function stamp(){
 
   try{
     await styleReady;
+    applySky(map);
 
     const results = await Promise.allSettled(wanted.map(l =>
       bring(l, p => { progress.set(l.id, p); tick(); })
@@ -274,6 +281,10 @@ function stamp(){
 
     badge();
     stamp();
+
+    // Drift the planet until somebody grabs it, so the first thing a visitor
+    // sees is a globe turning rather than a still image.
+    idleSpin(map, { deepLinked });
 
     // Nothing else on the page advertises that there are two more datasets
     // behind that button, so show a first-time visitor the panel outright.

@@ -5,18 +5,27 @@
    makes no data API calls for it at runtime.  That is deliberate: the public
    Overpass instances explicitly forbid being queried from a browser on every
    map move, and would rate-limit visitors of an app that did.
+
+   These are drawn unclustered, all 148,805 of them. Clustering would be the
+   obvious choice for this many points and it is the wrong one here: the
+   clusters were opaque discs with counts in them, and what makes this layer
+   worth looking at on a night globe is the carpet -- the way the individual
+   lights pile up into the shape of a metro area on their own.
 */
 
 import { esc, num, fetchJSON } from './util.js';
+import { lightLayers } from './lights.js';
 
 const DATA_URL = 'data/cameras.json';
 
+// Brand hues, pushed brighter than the flat-map palette because they now have
+// to carry against black rather than against paper.
 const BRANDS = [
-  { key:'flock',    label:'Flock Safety',        hex:'#E0873B' },
-  { key:'motorola', label:'Motorola / Vigilant', hex:'#4A6FA5' },
-  { key:'genetec',  label:'Genetec',             hex:'#5C8C6A' },
-  { key:'elsag',    label:'Leonardo / ELSAG',    hex:'#8E6BA8' },
-  { key:'other',    label:'Other / unlabelled',  hex:'#7C8794' },
+  { key:'flock',    label:'Flock Safety',        hex:'#FFA53D' },
+  { key:'motorola', label:'Motorola / Vigilant', hex:'#54A0FF' },
+  { key:'genetec',  label:'Genetec',             hex:'#3FD98B' },
+  { key:'elsag',    label:'Leonardo / ELSAG',    hex:'#B98BFF' },
+  { key:'other',    label:'Other / unlabelled',  hex:'#8FA6BF' },
 ];
 
 let rows = [], pools = {}, generated = '';
@@ -33,9 +42,10 @@ export default {
   id: 'cameras',
   label: 'ALPR cameras',
   blurb: 'Community-reported plate readers, from OpenStreetMap',
-  colour: '#E0873B',
+  colour: '#FFA53D',
   defaultOn: true,
-  interactive: ['cam', 'cam-clusters'],
+  interactive: ['cam-core'],
+  layerIds: ['cam-glow', 'cam-core'],
 
   async load(onProgress){
     const payload = await fetchJSON(DATA_URL, onProgress);
@@ -60,53 +70,26 @@ export default {
     map.addSource('cams', {
       type: 'geojson',
       data: { type:'FeatureCollection', features: allFeatures },
-      cluster: true,
-      clusterRadius: 46,
-      clusterMaxZoom: 15,
     });
 
-    map.addLayer({
-      id: 'cam-clusters', type: 'circle', source: 'cams',
-      filter: ['has', 'point_count'],
-      paint: {
-        'circle-color': '#141A22',
-        'circle-opacity': .92,
-        'circle-stroke-width': 4,
-        'circle-stroke-color': 'rgba(20,26,34,.16)',
-        'circle-radius': ['step', ['get','point_count'], 15, 20, 19, 100, 24, 1000, 30],
-      },
+    // Sub-pixel at world zoom on purpose. Individually invisible, collectively
+    // they trace out every lit corridor in North America and Europe.
+    const layers = lightLayers({
+      idPrefix: 'cam',
+      source: 'cams',
+      property: 'b',
+      stops: BRANDS.map((b, i) => [i, b.hex]),
+      fallback: '#8FA6BF',
+      radius: ['interpolate', ['linear'], ['zoom'],
+        0, 0.45, 3, 0.7, 6, 1.2, 10, 2.2, 14, 4, 18, 7],
+      glowScale: 3.2,
+      glowOpacity: ['interpolate', ['linear'], ['zoom'], 0, 0.5, 6, 0.36, 14, 0.26],
+      coreOpacity: ['interpolate', ['linear'], ['zoom'], 0, 0.85, 6, 0.95],
+      coreTint: 0.45,
     });
 
-    map.addLayer({
-      id: 'cam-cluster-count', type: 'symbol', source: 'cams',
-      filter: ['has', 'point_count'],
-      layout: {
-        'text-field': ['get', 'point_count_abbreviated'],
-        'text-font': ['Noto Sans Bold'],
-        'text-size': 12,
-        'text-allow-overlap': true,
-      },
-      paint: { 'text-color': '#fff' },
-    });
-
-    const brandColour = ['match', ['get','b']];
-    BRANDS.forEach((b, i) => brandColour.push(i, b.hex));
-    brandColour.push('#7C8794');
-
-    map.addLayer({
-      id: 'cam', type: 'circle', source: 'cams',
-      filter: ['!', ['has','point_count']],
-      paint: {
-        'circle-color': brandColour,
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 3.5, 14, 6, 18, 9],
-        'circle-stroke-width': 1.5,
-        'circle-stroke-color': '#fff',
-        'circle-opacity': .95,
-      },
-    });
+    for(const layer of layers) map.addLayer(layer);
   },
-
-  layerIds: ['cam-clusters', 'cam-cluster-count', 'cam'],
 
   filters(){
     const counts = BRANDS.map(() => 0);
@@ -128,19 +111,21 @@ export default {
     if(on) active.add(i); else active.delete(i);
   },
 
-  applyFilter(map){
-    const src = map.getSource('cams');
-    if(!src) return;
-    // Re-set the source rather than setFilter, so cluster counts reflect the
-    // visible brands instead of silently counting hidden points.
-    const features = active.size === BRANDS.length
-      ? allFeatures
-      : allFeatures.filter(f => active.has(f.properties.b));
-    src.setData({ type:'FeatureCollection', features });
+  applyFilter(map, visible){
+    if(!map.getLayer('cam-core')) return;
+    // A `match` needs at least one label, so an all-off state is spelled out
+    // as an expression that matches nothing.
+    const filter = active.size
+      ? ['match', ['get','b'], [...active], true, false]
+      : ['==', ['literal', 1], ['literal', 0]];
+
+    for(const id of ['cam-glow', 'cam-core']){
+      map.setFilter(id, filter);
+      map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
+    }
   },
 
   popup(f){
-    if(f.properties.point_count) return null;      // a cluster; caller zooms
     const r = rows[f.properties.i];
     const b = BRANDS[r[2]] || BRANDS[4];
 
@@ -154,7 +139,7 @@ export default {
 
     const osm = (r[8] === 0 ? 'node/' : 'way/') + r[9];
     return `<div class="pop">
-      <p class="pop-title"><span class="dot" style="background:${b.hex}"></span>${esc(b.label)}</p>
+      <p class="pop-title"><span class="dot" style="color:${b.hex}"></span>${esc(b.label)}</p>
       <dl>${items.map(x => `<dt>${esc(x[0])}</dt><dd>${esc(x[1])}</dd>`).join('')}</dl>
       <a href="https://www.openstreetmap.org/${osm}" target="_blank" rel="noopener">View on OpenStreetMap</a>
     </div>`;
@@ -166,7 +151,7 @@ export default {
 
   legend(){
     return {
-      note: `Crowdsourced, so a blank area means nobody has mapped it —
+      note: `Crowdsourced, so a dark area means nobody has mapped it —
              not that it has no cameras. Data ${generated.slice(0, 10)}.`,
       source: 'OpenStreetMap',
       url: 'https://www.openstreetmap.org/copyright',

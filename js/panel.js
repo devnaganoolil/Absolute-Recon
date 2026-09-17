@@ -101,7 +101,7 @@ function body(layer){
       el.setAttribute('aria-pressed', String(item.on));
       if(item.title) el.title = item.title;
       el.innerHTML =
-        `<span class="dot" style="background:${item.colour}"></span>` +
+        `<span class="dot" style="color:${item.colour}"></span>` +
         `${esc(item.label)}` +
         (item.count != null ? ` <span class="n">${num(item.count)}</span>` : '') +
         (item.note ? ` <span class="note">${esc(item.note)}</span>` : '');

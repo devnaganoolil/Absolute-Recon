@@ -16,16 +16,17 @@
 */
 
 import { esc, num, dateLabel, fetchJSON } from './util.js';
+import { lightLayers } from './lights.js';
 
 const DATA_URL = 'data/conflicts.json';
 
 // UCDP's three kinds of organised violence.
 const VIOLENCE = [
-  { tov:1, key:'state',    label:'State-based',  hex:'#A31621',
+  { tov:1, key:'state',    label:'State-based',  hex:'#FF3B4E',
     hint:'A government is one of the parties' },
-  { tov:2, key:'nonstate', label:'Non-state',    hex:'#C75146',
+  { tov:2, key:'nonstate', label:'Non-state',    hex:'#FF9A3C',
     hint:'Neither party is a government' },
-  { tov:3, key:'onesided', label:'Against civilians', hex:'#5C1A2E',
+  { tov:3, key:'onesided', label:'Against civilians', hex:'#FF4FD8',
     hint:'Organised violence against unarmed civilians' },
 ];
 
@@ -36,9 +37,11 @@ const RANGES = [
   { key:'all',  label:'Full window', days:null },
 ];
 
-// Don't label every one of ~900 conflicts; below this the bubble is a dot and
-// the name would be noise. MapLibre still collision-tests what survives.
-const LABEL_MIN_DEATHS = 150;
+// Don't label every one of ~900 conflicts; below this the light is a dot and
+// the name would be noise. A globe at world zoom has more empty sea to put
+// labels in than a flat map did, so collision alone left it looking like a
+// list -- the threshold does the thinning and the sort key handles the rest.
+const LABEL_MIN_DEATHS = 400;
 
 let payload = null;
 let events = [];         // GeoJSON features, one per reported event
@@ -71,12 +74,15 @@ export default {
   id: 'conflicts',
   label: 'Armed conflict',
   blurb: 'Reported political violence, from UCDP',
-  colour: '#A31621',
+  colour: '#FF3B4E',
   // 1.8 MB gzipped, and not what most visitors came for, so it is fetched the
   // first time somebody switches it on rather than at boot.
   defaultOn: false,
-  interactive: ['conflict-bubble', 'conflict-event'],
-  layerIds: ['conflict-bubble', 'conflict-label', 'conflict-event'],
+  interactive: ['conflict-bubble-core', 'conflict-event-core'],
+  layerIds: [
+    'conflict-event-glow', 'conflict-event-core',
+    'conflict-bubble-glow', 'conflict-bubble-core', 'conflict-label',
+  ],
 
   async load(onProgress){
     payload = await fetchJSON(DATA_URL, onProgress);
@@ -121,9 +127,7 @@ export default {
   },
 
   addLayers(map){
-    const tovColour = ['match', ['get','tov']];
-    VIOLENCE.forEach(v => tovColour.push(v.tov, v.hex));
-    tovColour.push('#7C8794');
+    const stops = VIOLENCE.map(v => [v.tov, v.hex]);
 
     map.addSource('conflict-events', {
       type: 'geojson',
@@ -134,43 +138,49 @@ export default {
       data: { type:'FeatureCollection', features: conflicts },
     });
 
-    // Individual events. Deliberately semi-transparent: where fighting is
-    // dense the overlap reads as intensity rather than as one flat blob.
-    map.addLayer({
-      id: 'conflict-event', type: 'circle', source: 'conflict-events',
-      minzoom: 4,
-      paint: {
-        'circle-color': tovColour,
-        'circle-opacity': ['case', ['==', ['get','vague'], 1], 0.12, 0.5],
-        'circle-stroke-color': tovColour,
-        'circle-stroke-width': ['case', ['==', ['get','vague'], 1], 1.2, 0.6],
-        'circle-stroke-opacity': ['case', ['==', ['get','vague'], 1], 0.8, 0.55],
-        // sqrt so a 1,000-death event is ~30x a 1-death one in area, not 1000x.
-        'circle-radius': [
-          'interpolate', ['linear'], ['zoom'],
-          4,  ['interpolate', ['linear'], ['sqrt', ['get','deaths']], 0, 1.6, 40, 9],
-          10, ['interpolate', ['linear'], ['sqrt', ['get','deaths']], 0, 3.5, 40, 22],
-          16, ['interpolate', ['linear'], ['sqrt', ['get','deaths']], 0, 6,   40, 40],
-        ],
-      },
-    });
+    // Individual events. sqrt so a 1,000-death event is ~30x a 1-death one in
+    // area, not 1000x, and a floor so a zero-casualty event still shows.
+    const eventRadius = ['interpolate', ['linear'], ['zoom'],
+      4,  ['interpolate', ['linear'], ['sqrt', ['get','deaths']], 0, 1.1, 40, 6],
+      10, ['interpolate', ['linear'], ['sqrt', ['get','deaths']], 0, 2.4, 40, 15],
+      16, ['interpolate', ['linear'], ['sqrt', ['get','deaths']], 0, 4,   40, 26],
+    ];
 
-    // One bubble per conflict, on top of the events.
-    map.addLayer({
-      id: 'conflict-bubble', type: 'circle', source: 'conflict-list',
-      paint: {
-        'circle-color': tovColour,
-        'circle-opacity': 0.72,
-        'circle-stroke-width': 1.5,
-        'circle-stroke-color': '#fff',
-        'circle-stroke-opacity': 0.9,
-        'circle-radius': [
-          'interpolate', ['linear'], ['zoom'],
-          0, ['interpolate', ['linear'], ['sqrt', ['get','deaths']], 0, 3, 400, 26],
-          6, ['interpolate', ['linear'], ['sqrt', ['get','deaths']], 0, 5, 400, 46],
-        ],
-      },
-    });
+    for(const layer of lightLayers({
+      idPrefix: 'conflict-event',
+      source: 'conflict-events',
+      property: 'tov',
+      stops,
+      fallback: '#FF8FA0',
+      radius: eventRadius,
+      glowScale: 3,
+      // Events UCDP could only place at province level or coarser are dimmed
+      // rather than hidden: still visible as a haze over the right region,
+      // without a hard dot implying a street corner.
+      glowOpacity: ['case', ['==', ['get','vague'], 1], 0.14, 0.34],
+      coreOpacity: ['case', ['==', ['get','vague'], 1], 0.22, 0.8],
+      coreTint: 0.4,
+      minzoom: 4,
+    })) map.addLayer(layer);
+
+    // One light per conflict, brighter and much larger than any single event.
+    const bubbleRadius = ['interpolate', ['linear'], ['zoom'],
+      0, ['interpolate', ['linear'], ['sqrt', ['get','deaths']], 0, 1.8, 400, 15],
+      6, ['interpolate', ['linear'], ['sqrt', ['get','deaths']], 0, 3,   400, 27],
+    ];
+
+    for(const layer of lightLayers({
+      idPrefix: 'conflict-bubble',
+      source: 'conflict-list',
+      property: 'tov',
+      stops,
+      fallback: '#FF8FA0',
+      radius: bubbleRadius,
+      glowScale: 3.4,
+      glowOpacity: 0.42,
+      coreOpacity: 0.9,
+      coreTint: 0.55,
+    })) map.addLayer(layer);
 
     map.addLayer({
       id: 'conflict-label', type: 'symbol', source: 'conflict-list',
@@ -191,8 +201,8 @@ export default {
         'symbol-sort-key': ['-', 0, ['get', 'deaths']],
       },
       paint: {
-        'text-color': '#4A0A12',
-        'text-halo-color': 'rgba(255,255,255,.92)',
+        'text-color': '#FFD6DC',
+        'text-halo-color': 'rgba(4, 8, 20, 0.9)',
         'text-halo-width': 1.6,
       },
     });
@@ -250,7 +260,7 @@ export default {
   },
 
   applyFilter(map, visible){
-    if(!map.getLayer('conflict-event')) return;
+    if(!map.getLayer('conflict-event-core')) return;
 
     // As above: an empty label list is not a valid `match`.
     const tovFilter = activeTov.size
@@ -264,18 +274,25 @@ export default {
       ? ['all', tovFilter]
       : ['all', tovFilter, ['>=', ['get','day'], floor]];
 
-    map.setFilter('conflict-event', eventFilter);
-    map.setFilter('conflict-bubble', tovFilter);
+    for(const id of ['conflict-event-glow', 'conflict-event-core']){
+      map.setFilter(id, eventFilter);
+    }
+    for(const id of ['conflict-bubble-glow', 'conflict-bubble-core']){
+      map.setFilter(id, tovFilter);
+    }
     map.setFilter('conflict-label', ['all', tovFilter, ['==', ['get','labelled'], 1]]);
 
     const vis = on => on && visible ? 'visible' : 'none';
-    map.setLayoutProperty('conflict-event',  'visibility', vis(showing.events));
-    map.setLayoutProperty('conflict-bubble', 'visibility', vis(showing.bubbles));
-    map.setLayoutProperty('conflict-label',  'visibility', vis(showing.bubbles));
+    for(const id of ['conflict-event-glow', 'conflict-event-core']){
+      map.setLayoutProperty(id, 'visibility', vis(showing.events));
+    }
+    for(const id of ['conflict-bubble-glow', 'conflict-bubble-core', 'conflict-label']){
+      map.setLayoutProperty(id, 'visibility', vis(showing.bubbles));
+    }
   },
 
   popup(f){
-    return f.layer.id === 'conflict-bubble'
+    return f.layer.id === 'conflict-bubble-core'
       ? conflictPopup(payload.conflicts[f.properties.i])
       : eventPopup(payload.rows[f.properties.i]);
   },
@@ -312,7 +329,7 @@ function conflictPopup(c){
   ].filter(x => x[1]);
 
   return `<div class="pop">
-    <p class="pop-title"><span class="dot" style="background:${v.hex}"></span>${esc(c.name)}</p>
+    <p class="pop-title"><span class="dot" style="color:${v.hex}"></span>${esc(c.name)}</p>
     <p class="pop-tag">${esc(v.label)} conflict</p>
     <dl>${rows.map(x => `<dt>${esc(x[0])}</dt><dd>${esc(x[1])}</dd>`).join('')}</dl>
     <a href="https://ucdp.uu.se/conflict/${encodeURIComponent(c.id)}"
@@ -341,7 +358,7 @@ function eventPopup(r){
     UCDP placed this at ${r[9] >= 6 ? 'country' : 'province'} level.</p>` : '';
 
   return `<div class="pop">
-    <p class="pop-title"><span class="dot" style="background:${v.hex}"></span>${esc(v.label)} violence</p>
+    <p class="pop-title"><span class="dot" style="color:${v.hex}"></span>${esc(v.label)} violence</p>
     ${headline ? `<p class="pop-lede">${esc(headline)}</p>` : ''}
     <dl>${rows.map(x => `<dt>${esc(x[0])}</dt><dd>${esc(x[1])}</dd>`).join('')}</dl>
     ${vague}
