@@ -21,9 +21,11 @@ No single source covers the field, so this merges:
                                  covers floods, cyclones and drought properly.
 
 All three are keyless, and all three send `Access-Control-Allow-Origin: *`, so
-the site refreshes them live in the browser and falls back to this file when a
-feed is unreachable.  Keeping the snapshot committed also means the map is never
-empty on first paint.
+the site could refresh them live in the browser.  It deliberately does not:
+normalising three unrelated schemas into one shape is most of this file, and
+doing it again in JavaScript would mean two copies of the same category mapping,
+free to drift apart.  The Action re-runs every three hours instead, which is
+fresh enough for a map whose shortest-lived hazard is a wildfire.
 
 Output: data/disasters.json.  Small enough (a few hundred KB) that it ships as
 plain GeoJSON-ish records rather than the interned arrays cameras.json uses.
@@ -44,7 +46,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "disasters.json"
 
-UA = "FlockCamerasNearMe/1.0 (static site data build; +https://github.com/)"
+UA = "AbsoluteRecon/1.0 (static site data build; +https://github.com/devnaganoolil/Absolute-Recon)"
 
 USGS = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 EONET = "https://eonet.gsfc.nasa.gov/api/v3/events"

@@ -55,7 +55,7 @@ CACHE_TTL = 7 * 86400
 # cached miss would hide a release that appeared an hour later.
 MISS_TTL = 6 * 3600
 
-UA = "FlockCamerasNearMe/1.0 (static site data build; +https://github.com/)"
+UA = "AbsoluteRecon/1.0 (static site data build; +https://github.com/devnaganoolil/Absolute-Recon)"
 
 # How far back to keep events.  UCDP candidate data lags real time by roughly
 # two months, so a 24-month window gives ~22 months of usable history and a

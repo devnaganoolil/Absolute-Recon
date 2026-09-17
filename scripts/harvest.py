@@ -36,7 +36,7 @@ ENDPOINTS = [
     "https://overpass.private.coffee/api/interpreter",
 ]
 
-UA = "FlockCamerasNearMe/1.0 (static site data build; +https://github.com/)"
+UA = "AbsoluteRecon/1.0 (static site data build; +https://github.com/devnaganoolil/Absolute-Recon)"
 
 # Overpass server-side timeout per request, seconds.
 QUERY_TIMEOUT = 180

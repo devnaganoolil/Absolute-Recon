@@ -99,7 +99,7 @@ export async function fetchJSON(url, onProgress){
 }
 
 /* ---------- remembered layer choices ---------- */
-const STORE = 'prm.layers.v1';
+const STORE = 'absrecon.layers.v1';
 
 export function loadPrefs(){
   try{
