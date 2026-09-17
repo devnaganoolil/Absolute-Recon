@@ -1,0 +1,69 @@
+name: Refresh disaster data
+
+# The most perishable of the three datasets: an earthquake matters within the
+# hour. USGS, EONET and GDACS are all fast and keyless, so this runs often and
+# cheaply -- unlike the camera refresh, which waits on Overpass.
+on:
+  schedule:
+    - cron: "9 */3 * * *"      # every three hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-disasters
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Harvest USGS, NASA EONET and GDACS
+        run: python3 scripts/harvest_disasters.py
+
+      - name: Sanity-check the result
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+
+          data = json.loads(pathlib.Path("data/disasters.json").read_text())
+          count = data["count"]
+          kinds = data["counts"]
+          print(f"harvested {count:,} events: {kinds}")
+
+          # Any one feed can be down without the file being useless, but losing
+          # the earthquakes means USGS failed, and that is most of the dataset.
+          if count < 50:
+              sys.exit(f"refusing to publish: only {count} events")
+          if kinds.get("quake", 0) < 20:
+              sys.exit("refusing to publish: the USGS feed looks like it failed")
+          PY
+
+      - name: Commit if the data changed
+        run: |
+          if git diff --quiet -- data/disasters.json; then
+            echo "no change"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          COUNT=$(python3 -c "import json;print(f\"{json.load(open('data/disasters.json'))['count']:,}\")")
+          git add data/disasters.json
+          git commit -m "data: disaster refresh — ${COUNT} events"
+          # Three-hourly commits race the other refresh jobs, so rebase rather
+          # than fail the run on a push that landed a moment earlier.
+          for attempt in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push && exit 0
+            echo "push attempt ${attempt} failed; retrying"
+            sleep 5
+          done
+          exit 1

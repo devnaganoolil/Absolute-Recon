@@ -1,0 +1,84 @@
+name: Refresh conflict data
+
+# UCDP publishes a candidate release once a month and consolidates quarterly,
+# so there is nothing to gain from running this more often than weekly.
+on:
+  schedule:
+    - cron: "41 6 * * 2"      # Tuesdays, 06:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-conflicts
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Harvest UCDP georeferenced events
+        run: python3 scripts/harvest_conflicts.py
+
+      - name: Sanity-check the result
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, subprocess, sys
+
+          data = json.loads(pathlib.Path("data/conflicts.json").read_text())
+          count = data["count"]
+          print(f"harvested {count:,} events in {len(data['conflicts']):,} conflicts")
+
+          if count < 5000:
+              sys.exit(f"refusing to publish: only {count} events, harvest likely partial")
+
+          # A run where only some release files downloaded still produces a
+          # valid-looking file, just a much emptier one. Compare with the last
+          # committed version before overwriting it.
+          try:
+              prev = json.loads(subprocess.check_output(
+                  ["git", "show", "HEAD:data/conflicts.json"], text=True))["count"]
+          except Exception:
+              print("no previous dataset to compare against")
+              sys.exit(0)
+
+          print(f"previous: {prev:,}")
+          # The window rolls forward, so a small decline is normal; a large one
+          # is not. UCDP also revises, hence the allowance in both directions.
+          if prev and count < prev * 0.8:
+              sys.exit(
+                  f"refusing to publish: {count:,} is a {100*(1-count/prev):.0f}% "
+                  f"drop from {prev:,}; investigate before overwriting"
+              )
+          PY
+
+      - name: Commit if the data changed
+        run: |
+          if git diff --quiet -- data/conflicts.json; then
+            echo "no change"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          SUMMARY=$(python3 -c "
+          import json
+          d = json.load(open('data/conflicts.json'))
+          print(f\"{d['count']:,} events, {len(d['conflicts']):,} conflicts\")
+          ")
+          git add data/conflicts.json
+          git commit -m "data: conflict refresh — ${SUMMARY}"
+          for attempt in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push && exit 0
+            echo "push attempt ${attempt} failed; retrying"
+            sleep 5
+          done
+          exit 1

@@ -6,11 +6,23 @@
   X-Frame-Options: SAMEORIGIN
   Permissions-Policy: geolocation=(self), camera=(), microphone=(), payment=()
 
-# The dataset is rewritten by the weekly refresh, so let a browser reuse it for
-# an hour but always revalidate against the edge after that.
-/data/*
+# Cameras and conflict events are rewritten weekly, so let a browser reuse them
+# for an hour but always revalidate against the edge after that.
+/data/cameras.json
   Cache-Control: public, max-age=3600, stale-while-revalidate=86400
 
-# Never let a stale shell hide a data-format change.
+/data/conflicts.json
+  Cache-Control: public, max-age=3600, stale-while-revalidate=86400
+
+# Disasters are refreshed every three hours and an earthquake matters within
+# the hour, so this one gets a much shorter leash.
+/data/disasters.json
+  Cache-Control: public, max-age=600, stale-while-revalidate=3600
+
+# Never let a stale shell hide a data-format change. The modules are versioned
+# only by this file referencing them, so they need the same treatment.
 /index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/js/*
   Cache-Control: public, max-age=0, must-revalidate

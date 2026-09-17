@@ -72,4 +72,11 @@ jobs:
           COUNT=$(python3 -c "import json;print(f\"{json.load(open('data/cameras.json'))['count']:,}\")")
           git add data/cameras.json
           git commit -m "data: weekly refresh — ${COUNT} cameras"
-          git push
+          # The disaster refresh pushes every three hours, so this can lose a
+          # race it would otherwise have no reason to retry.
+          for attempt in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push && exit 0
+            echo "push attempt ${attempt} failed; retrying"
+            sleep 5
+          done
+          exit 1

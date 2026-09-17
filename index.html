@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Plate Reader Map — where the ALPR cameras are</title>
-<meta name="description" content="A map of community-reported automated license plate reader (ALPR) camera locations worldwide, built from OpenStreetMap data.">
+<title>Plate Reader Map — cameras, conflict and disasters</title>
+<meta name="description" content="A map of community-reported ALPR camera locations, active armed conflicts, and current natural disasters worldwide — built from OpenStreetMap, UCDP, USGS, NASA and GDACS data.">
 
 <meta property="og:title" content="Plate Reader Map">
-<meta property="og:description" content="Community-reported ALPR camera locations, worldwide.">
+<meta property="og:description" content="ALPR cameras, armed conflict and natural disasters on one map.">
 <meta property="og:type" content="website">
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.css">
@@ -19,12 +19,8 @@
   --steel:#E7EAEE;
   --paper:#F7F8F9;
   --line:#C9D0D8;
-  --flock:#E0873B;
-  --motorola:#4A6FA5;
-  --genetec:#5C8C6A;
-  --elsag:#8E6BA8;
-  --other:#7C8794;
   --hazard:#D4A017;
+  --danger:#8C3A2E;
 }
 
 *{box-sizing:border-box}
@@ -42,9 +38,9 @@ body{
 /* ---------- top bar ---------- */
 .bar{
   position:absolute;top:0;left:0;right:0;z-index:600;
-  padding:10px 12px 0;
+  padding:10px 12px 12px;
   padding-top:calc(10px + env(safe-area-inset-top,0px));
-  background:linear-gradient(to bottom,rgba(247,248,249,.97) 70%,rgba(247,248,249,0));
+  background:linear-gradient(to bottom,rgba(247,248,249,.97) 72%,rgba(247,248,249,0));
   pointer-events:none;
 }
 .bar > *{pointer-events:auto}
@@ -53,7 +49,7 @@ body{
 .brand h1{font-size:17px;font-weight:650;letter-spacing:-.015em;margin:0}
 .brand span{font-size:12.5px;color:var(--ink-soft)}
 
-.searchrow{display:flex;gap:8px}
+.searchrow{display:flex;gap:8px;max-width:860px}
 .field{
   flex:1;position:relative;display:flex;align-items:center;
   background:#fff;border:1px solid var(--line);border-radius:9px;
@@ -71,48 +67,118 @@ body{
 }
 .iconbtn:hover{color:var(--ink)}
 
-button.solid{
-  border:1px solid var(--ink);background:var(--ink);color:#fff;
+button.solid,button.ghost{
   font:inherit;font-size:14px;font-weight:550;
   padding:0 14px;border-radius:9px;cursor:pointer;white-space:nowrap;
 }
+button.solid{border:1px solid var(--ink);background:var(--ink);color:#fff}
 button.solid:hover{background:#0B1017}
 button.solid:disabled{opacity:.45;cursor:default}
+button.ghost{
+  border:1px solid var(--line);background:#fff;color:var(--ink);
+  display:inline-flex;align-items:center;gap:7px;
+}
+button.ghost:hover{border-color:var(--ink-soft)}
+button.ghost .count{
+  font-variant-numeric:tabular-nums;font-size:11.5px;font-weight:650;
+  background:var(--ink);color:#fff;border-radius:999px;
+  min-width:17px;height:17px;display:grid;place-items:center;padding:0 4px;
+}
 
 :focus-visible{outline:2px solid var(--hazard);outline-offset:2px}
 
-/* ---------- filter chips ---------- */
-.chips{
-  display:flex;gap:6px;margin-top:8px;overflow-x:auto;
-  scrollbar-width:none;padding-bottom:10px;
+/* ---------- layer panel ---------- */
+.panel{
+  position:absolute;z-index:620;
+  top:calc(104px + env(safe-area-inset-top,0px));right:12px;width:332px;
+  max-height:calc(100% - 132px - env(safe-area-inset-top,0px));
+  display:flex;flex-direction:column;
+  background:#fff;border:1px solid var(--line);border-radius:12px;
+  box-shadow:0 10px 30px rgba(20,26,34,.18);
 }
-.chips::-webkit-scrollbar{display:none}
+.panel[hidden]{display:none}
+.panel-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 8px 11px 14px;border-bottom:1px solid var(--steel);flex:none;
+}
+.panel-head h2{font-size:13.5px;font-weight:650;margin:0;letter-spacing:.01em}
+.panel-body{overflow-y:auto;padding:4px 0 6px;overscroll-behavior:contain}
+
+.layer{padding:12px 14px;border-bottom:1px solid var(--steel)}
+.layer:last-child{border-bottom:0}
+
+/* switch */
+.switch{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.switch input{position:absolute;opacity:0;width:0;height:0}
+.switch .track{
+  flex:none;width:34px;height:20px;border-radius:999px;margin-top:1px;
+  background:var(--line);position:relative;transition:background .15s ease;
+}
+.switch .track::after{
+  content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;
+  border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);
+  transition:transform .15s ease;
+}
+.switch input:checked + .track{background:var(--accent,var(--ink))}
+.switch input:checked + .track::after{transform:translateX(14px)}
+.switch input:focus-visible + .track{outline:2px solid var(--hazard);outline-offset:2px}
+.switch-text{display:block;min-width:0}
+.switch-title{display:block;font-size:14px;font-weight:600;line-height:1.3}
+.switch-sub{display:block;font-size:11.5px;color:var(--ink-soft);line-height:1.35;margin-top:1px}
+
+.layer-body{margin:12px 0 0 44px}
+.layer-note{
+  font-size:11.5px;color:var(--ink-soft);line-height:1.45;
+  margin:10px 0 0 44px;
+}
+.layer-note.err{color:var(--danger)}
+.layer-note a{color:var(--ink-soft)}
+.fgroup + .fgroup{margin-top:11px}
+.fgroup-title{
+  font-size:10.5px;font-weight:650;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--ink-soft);margin:0 0 6px;
+}
+
+/* ---------- chips ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{
   display:inline-flex;align-items:center;gap:6px;
   border:1px solid var(--line);background:#fff;color:var(--ink-soft);
-  font:inherit;font-size:12.5px;font-weight:500;
-  padding:6px 10px;border-radius:999px;cursor:pointer;white-space:nowrap;
+  font:inherit;font-size:12px;font-weight:500;
+  padding:5px 9px;border-radius:999px;cursor:pointer;white-space:nowrap;
+  max-width:100%;
 }
-.chip[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);background:#fff}
-.chip[aria-pressed="false"]{opacity:.5}
+.chip[aria-pressed="true"]{border-color:var(--ink);color:var(--ink)}
+.chip[aria-pressed="false"]{opacity:.45}
 .dot{width:9px;height:9px;border-radius:50%;flex:none}
 .chip .n{font-variant-numeric:tabular-nums;color:var(--ink-soft)}
+.chip .note{font-size:10.5px;color:var(--ink-soft);font-style:italic}
+
+/* segmented control */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{
+  font:inherit;font-size:12px;font-weight:500;border:0;
+  background:#fff;color:var(--ink-soft);padding:6px 10px;cursor:pointer;
+  border-right:1px solid var(--line);
+}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
 
 /* ---------- status ---------- */
 .status{
   position:absolute;left:50%;transform:translateX(-50%);
-  bottom:calc(30px + env(safe-area-inset-bottom,0px));z-index:600;
+  bottom:calc(30px + env(safe-area-inset-bottom,0px));z-index:610;
   background:var(--ink);color:#fff;border-radius:999px;
   font-size:13px;padding:9px 16px;
   box-shadow:0 4px 14px rgba(20,26,34,.25);
   max-width:calc(100% - 32px);text-align:center;
 }
-.status.err{background:#8C3A2E}
+.status.err{background:var(--danger)}
 .status[hidden]{display:none}
 
 /* ---------- search results ---------- */
 .hits{
-  position:absolute;left:12px;right:12px;z-index:650;
+  position:absolute;left:12px;right:12px;max-width:836px;z-index:650;
   background:#fff;border:1px solid var(--line);border-radius:9px;
   box-shadow:0 8px 24px rgba(20,26,34,.16);
   overflow:hidden;max-height:50vh;overflow-y:auto;
@@ -133,10 +199,20 @@ button.solid:disabled{opacity:.45;cursor:default}
   font-size:13.5px;line-height:1.45;
   box-shadow:0 6px 20px rgba(20,26,34,.2);
 }
-.pop-title{font-weight:650;font-size:14.5px;margin:0 0 6px;display:flex;align-items:center;gap:7px}
+.pop-title{font-weight:650;font-size:14.5px;margin:0 0 4px;display:flex;align-items:flex-start;gap:7px}
+.pop-title .dot{margin-top:5px}
+.pop-tag{
+  font-size:10.5px;font-weight:650;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--ink-soft);margin:0 0 7px;
+}
+.pop-lede{margin:0 0 8px;font-size:12.5px;color:var(--ink);line-height:1.4}
 .pop dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0}
-.pop dt{color:var(--ink-soft)}
+.pop dt{color:var(--ink-soft);white-space:nowrap}
 .pop dd{margin:0}
+.pop-warn{
+  margin:8px 0 0;padding:6px 8px;border-radius:6px;
+  background:#FDF6E3;color:#6B5312;font-size:11.5px;line-height:1.4;
+}
 .pop a{display:inline-block;margin-top:8px;color:var(--ink)}
 
 /* ---------- footer ---------- */
@@ -144,6 +220,7 @@ button.solid:disabled{opacity:.45;cursor:default}
   position:absolute;left:8px;bottom:calc(4px + env(safe-area-inset-bottom,0px));
   z-index:500;font-size:10.5px;color:var(--ink-soft);
   background:rgba(247,248,249,.85);padding:3px 7px;border-radius:5px;
+  max-width:calc(100% - 120px);
 }
 .foot a{color:var(--ink-soft)}
 
@@ -164,9 +241,19 @@ button.solid:disabled{opacity:.45;cursor:default}
 }
 .bar-fill{height:100%;width:0;background:var(--ink);transition:width .25s ease}
 
-@media (max-width:520px){
+/* ---------- small screens ---------- */
+@media (max-width:640px){
   .brand span{display:none}
   button.solid{padding:0 11px;font-size:13.5px}
+  button.ghost{padding:0 11px}
+  button.ghost .label{display:none}
+  .panel{
+    top:auto;left:0;right:0;bottom:0;width:auto;
+    max-height:min(76%,560px);
+    border-radius:14px 14px 0 0;border-bottom:0;
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  .status{bottom:calc(74px + env(safe-area-inset-bottom,0px))}
 }
 @media (prefers-reduced-motion:reduce){
   *{transition:none !important;animation:none !important}
@@ -175,12 +262,12 @@ button.solid:disabled{opacity:.45;cursor:default}
 </head>
 <body>
 
-<div id="map" role="application" aria-label="Map of license plate reader cameras"></div>
+<div id="map" role="application" aria-label="Map of plate reader cameras, armed conflict and natural disasters"></div>
 
 <header class="bar">
   <div class="brand">
     <h1>Plate Reader Map</h1>
-    <span>Community-reported ALPR camera locations</span>
+    <span>ALPR cameras · armed conflict · natural disasters</span>
   </div>
 
   <div class="searchrow">
@@ -190,414 +277,43 @@ button.solid:disabled{opacity:.45;cursor:default}
       <button class="iconbtn" id="locate" title="Use my location" aria-label="Use my location">◎</button>
     </div>
     <button class="solid" id="go">Search</button>
+    <button class="ghost" id="panel-toggle" aria-expanded="false" aria-controls="panel"
+            title="Choose which data to show">
+      <span class="label">Layers</span>
+      <span class="count" id="panel-count">3</span>
+    </button>
   </div>
-
-  <div class="chips" id="chips" role="group" aria-label="Filter by manufacturer"></div>
 </header>
+
+<aside class="panel" id="panel" aria-label="Map layers" hidden>
+  <div class="panel-head">
+    <h2>Layers &amp; filters</h2>
+    <button class="iconbtn" id="panel-close" aria-label="Close layers panel">✕</button>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+</aside>
 
 <div class="hits" id="hits" role="listbox" aria-label="Search results" hidden></div>
 <div class="status" id="status" hidden></div>
 
 <div class="foot">
-  Camera data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
-  contributors (ODbL) · basemap <a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a>
+  Cameras © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
+  (ODbL) · conflict <a href="https://ucdp.uu.se/" target="_blank" rel="noopener">UCDP</a> (CC BY)
+  · hazards <a href="https://earthquake.usgs.gov/" target="_blank" rel="noopener">USGS</a>,
+  <a href="https://eonet.gsfc.nasa.gov/" target="_blank" rel="noopener">NASA</a>,
+  <a href="https://www.gdacs.org/" target="_blank" rel="noopener">GDACS</a>
+  · basemap <a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a>
   · <span id="stamp"></span>
 </div>
 
 <div class="boot" id="boot">
   <div class="inner">
-    <div id="boot-msg">Loading camera data…</div>
+    <div id="boot-msg">Loading map data…</div>
     <div class="bar-track"><div class="bar-fill" id="boot-bar"></div></div>
   </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.js"></script>
-<script>
-/* ------------------------------------------------------------------
-   Plate Reader Map
-
-   Every camera ships as a static file built by scripts/harvest.py, so
-   the page makes no data API calls at runtime.  That is deliberate:
-   the public Overpass instances explicitly forbid being queried from
-   a browser on map movement, and would rate-limit visitors.
-
-   Basemap is OpenFreeMap (keyless, unlimited).  Geocoding is Photon,
-   which permits public app use, falling back to Nominatim.
------------------------------------------------------------------- */
-
-const DATA_URL = 'data/cameras.json';
-
-const BRANDS = [
-  { key:'flock',    label:'Flock Safety',       hex:'#E0873B' },
-  { key:'motorola', label:'Motorola / Vigilant',hex:'#4A6FA5' },
-  { key:'genetec',  label:'Genetec',            hex:'#5C8C6A' },
-  { key:'elsag',    label:'Leonardo / ELSAG',   hex:'#8E6BA8' },
-  { key:'other',    label:'Other / unlabelled', hex:'#7C8794' }
-];
-
-const active = new Set(BRANDS.map((_, i) => i));
-let rows = [], pools = {}, generated = '';
-
-const $ = id => document.getElementById(id);
-
-/* ---------- status pill ---------- */
-let statusTimer;
-function say(msg, kind){
-  const el = $('status');
-  clearTimeout(statusTimer);
-  if(!msg){ el.hidden = true; return; }
-  el.textContent = msg;
-  el.className = 'status' + (kind === 'err' ? ' err' : '');
-  el.hidden = false;
-  if(kind !== 'busy') statusTimer = setTimeout(() => { el.hidden = true; }, 4500);
-}
-
-/* ---------- map ---------- */
-const map = new maplibregl.Map({
-  container: 'map',
-  style: 'https://tiles.openfreemap.org/styles/liberty',
-  center: [-98.58, 39.83],
-  zoom: 3.4,
-  attributionControl: false,
-  hash: true               // shareable deep links: #zoom/lat/lon
-});
-
-// MapLibre only re-measures on window resize.  Mobile browser chrome sliding
-// away, an orientation change, or the page being revealed after loading hidden
-// all resize the container without one, leaving a stretched canvas.
-if(window.ResizeObserver){
-  new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
-}
-
-map.addControl(new maplibregl.NavigationControl({ showCompass:false }), 'bottom-right');
-map.addControl(new maplibregl.GeolocateControl({
-  positionOptions:{ enableHighAccuracy:true },
-  trackUserLocation:false
-}), 'bottom-right');
-map.addControl(new maplibregl.AttributionControl({ compact:true }), 'bottom-right');
-map.addControl(new maplibregl.ScaleControl({ maxWidth:90, unit:'imperial' }), 'bottom-left');
-
-/* ---------- load the static dataset ---------- */
-async function loadData(){
-  const res = await fetch(DATA_URL);
-  if(!res.ok) throw new Error('HTTP ' + res.status);
-
-  // Stream so the progress bar reflects reality on a slow connection.
-  const total = +res.headers.get('content-length') || 0;
-  const reader = res.body && res.body.getReader ? res.body.getReader() : null;
-  let text;
-
-  if(reader){
-    const chunks = [];
-    let got = 0;
-    for(;;){
-      const { done, value } = await reader.read();
-      if(done) break;
-      chunks.push(value);
-      got += value.length;
-      if(total) $('boot-bar').style.width = Math.min(97, (got / total) * 100) + '%';
-    }
-    const joined = new Uint8Array(got);
-    let at = 0;
-    for(const c of chunks){ joined.set(c, at); at += c.length; }
-    text = new TextDecoder().decode(joined);
-  }else{
-    text = await res.text();
-  }
-
-  $('boot-bar').style.width = '99%';
-  const payload = JSON.parse(text);
-  rows = payload.rows;
-  pools = payload.pools;
-  generated = payload.generated || '';
-  return payload;
-}
-
-// Built once and reused. Re-allocating 148k feature objects on every filter
-// toggle cost ~340ms on the main thread; filtering the existing array is ~20x
-// cheaper because it only copies references.
-let allFeatures = [];
-
-function buildFeatures(){
-  // Properties stay tiny -- b for styling, i to look the rest up on click.
-  allFeatures = new Array(rows.length);
-  for(let i = 0; i < rows.length; i++){
-    const r = rows[i];
-    allFeatures[i] = {
-      type:'Feature',
-      geometry:{ type:'Point', coordinates:[r[1], r[0]] },
-      properties:{ b:r[2], i }
-    };
-  }
-  return { type:'FeatureCollection', features: allFeatures };
-}
-
-/* ---------- layers ---------- */
-const brandColour = ['match', ['get','b']];
-BRANDS.forEach((b, i) => brandColour.push(i, b.hex));
-brandColour.push('#7C8794');
-
-function addLayers(geojson){
-  map.addSource('cams', {
-    type:'geojson',
-    data: geojson,
-    cluster: true,
-    clusterRadius: 46,
-    clusterMaxZoom: 15
-  });
-
-  map.addLayer({
-    id:'clusters', type:'circle', source:'cams',
-    filter:['has','point_count'],
-    paint:{
-      'circle-color':'#141A22',
-      'circle-opacity':.92,
-      'circle-stroke-width':4,
-      'circle-stroke-color':'rgba(20,26,34,.16)',
-      'circle-radius':['step',['get','point_count'], 15, 20, 19, 100, 24, 1000, 30]
-    }
-  });
-
-  map.addLayer({
-    id:'cluster-count', type:'symbol', source:'cams',
-    filter:['has','point_count'],
-    layout:{
-      'text-field':['get','point_count_abbreviated'],
-      'text-font':['Noto Sans Bold'],
-      'text-size':12,
-      'text-allow-overlap':true
-    },
-    paint:{ 'text-color':'#fff' }
-  });
-
-  map.addLayer({
-    id:'cam', type:'circle', source:'cams',
-    filter:['!',['has','point_count']],
-    paint:{
-      'circle-color': brandColour,
-      'circle-radius':['interpolate',['linear'],['zoom'], 8, 3.5, 14, 6, 18, 9],
-      'circle-stroke-width':1.5,
-      'circle-stroke-color':'#fff',
-      'circle-opacity':.95
-    }
-  });
-}
-
-function applyFilter(){
-  const src = map.getSource('cams');
-  if(!src) return;
-  // Re-set the source rather than setFilter, so cluster counts reflect the
-  // visible brands instead of silently counting hidden points.
-  const features = active.size === BRANDS.length
-    ? allFeatures
-    : allFeatures.filter(f => active.has(f.properties.b));
-  src.setData({ type:'FeatureCollection', features });
-}
-
-/* ---------- popup ---------- */
-const esc = s => String(s).replace(/[&<>"']/g, c =>
-  ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-
-function pick(pool, idx){
-  return idx >= 0 && pools[pool] ? pools[pool][idx] : null;
-}
-
-function popupHtml(i){
-  const r = rows[i];
-  const b = BRANDS[r[2]] || BRANDS[4];
-  const items = [
-    ['Type',     pick('type', r[7])],
-    ['Make',     pick('mfr',  r[3])],
-    ['Operator', pick('op',   r[4])],
-    ['Facing',   r[5] >= 0 ? r[5] + '°' : null],
-    ['Mount',    pick('mount',r[6])]
-  ].filter(x => x[1]);
-
-  const osm = (r[8] === 0 ? 'node/' : 'way/') + r[9];
-  return `<div class="pop">
-    <p class="pop-title"><span class="dot" style="background:${b.hex}"></span>${esc(b.label)}</p>
-    <dl>${items.map(x => `<dt>${esc(x[0])}</dt><dd>${esc(x[1])}</dd>`).join('')}</dl>
-    <a href="https://www.openstreetmap.org/${osm}" target="_blank" rel="noopener">View on OpenStreetMap</a>
-  </div>`;
-}
-
-function wireInteractions(){
-  map.on('click', 'cam', e => {
-    const f = e.features[0];
-    new maplibregl.Popup({ closeButton:true, maxWidth:'280px' })
-      .setLngLat(f.geometry.coordinates)
-      .setHTML(popupHtml(f.properties.i))
-      .addTo(map);
-  });
-
-  map.on('click', 'clusters', async e => {
-    const f = map.queryRenderedFeatures(e.point, { layers:['clusters'] })[0];
-    const zoom = await map.getSource('cams').getClusterExpansionZoom(f.properties.cluster_id);
-    map.easeTo({ center:f.geometry.coordinates, zoom });
-  });
-
-  for(const layer of ['cam','clusters']){
-    map.on('mouseenter', layer, () => map.getCanvas().style.cursor = 'pointer');
-    map.on('mouseleave', layer, () => map.getCanvas().style.cursor = '');
-  }
-}
-
-/* ---------- chips ---------- */
-function buildChips(){
-  const wrap = $('chips');
-  const counts = BRANDS.map(() => 0);
-  for(const r of rows) counts[r[2]]++;
-
-  wrap.innerHTML = '';
-  BRANDS.forEach((b, i) => {
-    const el = document.createElement('button');
-    el.className = 'chip';
-    el.setAttribute('aria-pressed', 'true');
-    el.innerHTML = `<span class="dot" style="background:${b.hex}"></span>${b.label} ` +
-                   `<span class="n">${counts[i].toLocaleString()}</span>`;
-    el.onclick = () => {
-      if(active.has(i)) active.delete(i); else active.add(i);
-      el.setAttribute('aria-pressed', active.has(i));
-      applyFilter();
-    };
-    wrap.appendChild(el);
-  });
-}
-
-/* ---------- place search ---------- */
-let searchSeq = 0;
-
-async function search(text){
-  const mine = ++searchSeq;
-  say('Looking up that place…', 'busy');
-  let hits = [];
-
-  try{
-    const r = await fetch('https://photon.komoot.io/api/?limit=5&q=' + encodeURIComponent(text));
-    if(r.ok){
-      const j = await r.json();
-      hits = (j.features || []).map(f => ({
-        name: f.properties.name,
-        sub: [f.properties.city, f.properties.state, f.properties.country].filter(Boolean).join(', '),
-        lon: f.geometry.coordinates[0],
-        lat: f.geometry.coordinates[1],
-        extent: f.properties.extent            // [w, n, e, s]
-      }));
-    }
-  }catch(e){ /* fall through to Nominatim */ }
-
-  if(!hits.length){
-    try{
-      const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=5&q=' +
-                            encodeURIComponent(text));
-      const j = await r.json();
-      hits = j.map(h => ({
-        name: h.display_name.split(',')[0],
-        sub: h.display_name.split(',').slice(1, 3).join(',').trim(),
-        lon: +h.lon, lat: +h.lat,
-        bbox: h.boundingbox                     // [s, n, w, e]
-      }));
-    }catch(e){ /* nothing left to try */ }
-  }
-
-  if(mine !== searchSeq) return;                // a newer search superseded this
-  if(!hits.length){ say('No match for that place.', 'err'); showHits([]); return; }
-
-  say('');
-  if(hits.length === 1) return void goTo(hits[0]);
-  showHits(hits);
-}
-
-function goTo(h){
-  showHits([]);
-  if(h.extent){
-    const [w, n, e, s] = h.extent;
-    map.fitBounds([[w, s], [e, n]], { padding:60, maxZoom:15, duration:900 });
-  }else if(h.bbox){
-    const [s, n, w, e] = h.bbox.map(Number);
-    map.fitBounds([[w, s], [e, n]], { padding:60, maxZoom:15, duration:900 });
-  }else{
-    map.flyTo({ center:[h.lon, h.lat], zoom:13 });
-  }
-}
-
-function showHits(hits){
-  const box = $('hits');
-  if(!hits.length){ box.hidden = true; box.innerHTML = ''; return; }
-
-  box.innerHTML = '';
-  for(const h of hits){
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.setAttribute('role', 'option');
-    b.innerHTML = `${esc(h.name)}<span class="sub">${esc(h.sub || '')}</span>`;
-    b.onclick = () => goTo(h);
-    box.appendChild(b);
-  }
-  // Sit the dropdown just under the search field.
-  const rect = $('q').getBoundingClientRect();
-  box.style.top = (rect.bottom + 6) + 'px';
-  box.hidden = false;
-}
-
-/* ---------- wiring ---------- */
-function submitSearch(){
-  const v = $('q').value.trim();
-  if(v) search(v);
-}
-
-$('go').onclick = submitSearch;
-$('q').addEventListener('keydown', e => {
-  if(e.key === 'Enter'){ e.preventDefault(); submitSearch(); }
-  if(e.key === 'Escape') showHits([]);
-});
-document.addEventListener('click', e => {
-  if(!$('hits').contains(e.target) && e.target !== $('q')) showHits([]);
-});
-
-$('locate').onclick = () => {
-  if(!navigator.geolocation){ say('This browser can’t share a location.', 'err'); return; }
-  say('Finding you…', 'busy');
-  navigator.geolocation.getCurrentPosition(
-    p => { say(''); map.flyTo({ center:[p.coords.longitude, p.coords.latitude], zoom:14 }); },
-    () => say('Location permission was denied.', 'err'),
-    { enableHighAccuracy:true, timeout:10000 }
-  );
-};
-
-/* ---------- boot ---------- */
-(async function boot(){
-  const bootEl = $('boot');
-  try{
-    // Gate on the style, not on 'load'.  'load' waits for a completed render,
-    // which a browser never performs in a background tab -- that would leave
-    // this overlay up until the visitor focused the tab.  Sources and layers
-    // only need the style.
-    const styleReady = map.isStyleLoaded()
-      ? Promise.resolve()
-      : new Promise(res => map.once('style.load', res));
-
-    const [payload] = await Promise.all([loadData(), styleReady]);
-
-    addLayers(buildFeatures());
-    wireInteractions();
-    buildChips();
-
-    if(generated){
-      $('stamp').textContent = 'data ' + generated.slice(0, 10);
-    }
-
-    $('boot-bar').style.width = '100%';
-    bootEl.classList.add('gone');
-    setTimeout(() => { bootEl.hidden = true; }, 400);
-
-    say(`${payload.count.toLocaleString()} cameras loaded — search a place or zoom in.`);
-  }catch(err){
-    $('boot-msg').textContent = 'Could not load the camera data. Please refresh.';
-    $('boot-bar').style.display = 'none';
-    console.error(err);
-  }
-})();
-</script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -12,3 +12,9 @@ alpr-map.html
 # harvest checkpoint
 data/.harvest-state.json
 data/.harvest-state.tmp
+
+# UCDP release download cache (see scripts/harvest_conflicts.py)
+data/.ucdp-cache/
+
+# Local dev server config for the Claude Code browser pane
+.claude/launch.json
