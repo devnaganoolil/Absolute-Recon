@@ -15,7 +15,7 @@ Each is a layer you can switch on and off independently, and each point is
 drawn as a light rather than a marker — so at world zoom the data reads the way
 city lights do from orbit, and the colour tells you what kind of light it is.
 
-Live site: _(fill in once Cloudflare Pages is connected)_
+Live site: <https://devnaganoolil.github.io/Absolute-Recon/>
 
 ## How it works
 
@@ -232,7 +232,30 @@ registry.
 The attribution in the page footer is a licence condition for several of these
 — please keep it.
 
-## Deploying to Cloudflare Pages
+## Deploying
+
+The site is plain static files at the repo root with no build step, so it
+deploys anywhere that serves a directory. Every asset path is relative, which
+means it works just as well under a subpath (`/Absolute-Recon/`) as at a
+domain root — don't change that without checking both.
+
+### GitHub Pages (current)
+
+Settings → Pages → Source: **Deploy from a branch**, branch `main`, folder
+`/ (root)`. Live at <https://devnaganoolil.github.io/Absolute-Recon/>.
+
+Three things to know:
+
+- `.nojekyll` is required. Without it GitHub runs the files through Jekyll,
+  which silently drops anything whose name starts with an underscore.
+- GitHub Pages has no header configuration, so `_headers` does nothing there
+  and everything is served with GitHub's own ~10 minute CDN cache. That is
+  fine here — a data refresh appears within ten minutes — but it does mean the
+  short cache the disaster feed wants is not in effect.
+- Pages on a **private** repo needs a paid plan. This repo is public, which is
+  what makes the free tier work.
+
+### Cloudflare Pages
 
 1. Push this repo to GitHub.
 2. In the Cloudflare dashboard: **Workers & Pages → Create → Pages → Connect to
@@ -243,8 +266,9 @@ The attribution in the page footer is a licence condition for several of these
    - Build output directory: `/`
 4. Deploy.
 
-`_headers` is picked up automatically. Each refresh Action commits its
-regenerated data file, and that push triggers a new Pages deploy.
+`_headers` is picked up automatically there (unlike GitHub Pages). Each
+refresh Action commits its regenerated data file, and that push triggers a new
+deploy on whichever host is connected.
 
 The Actions need no secrets — they use the built-in `GITHUB_TOKEN` — but the
 repo must allow them to push: **Settings → Actions → General → Workflow

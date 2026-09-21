@@ -1,4 +1,10 @@
 # Cloudflare Pages header rules.
+#
+# GitHub Pages ignores this file -- it has no header configuration at all, and
+# serves everything with its own ~10 minute CDN cache. That is survivable here
+# (a data refresh shows up within ten minutes, and the modules are versioned by
+# index.html referencing them), so the file is kept for a move back to
+# Cloudflare rather than deleted.
 
 /*
   X-Content-Type-Options: nosniff
